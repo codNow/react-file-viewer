@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from 'react';
-import { Upload, X, FileText, Table, FileSpreadsheet } from 'lucide-react';
+import { Upload, X, FileText, Table } from 'lucide-react';
 import * as mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 
@@ -10,6 +10,8 @@ function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [excelData, setExcelData] = useState<any[]>([]);
+
+
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = event.target.files?.[0];
@@ -26,19 +28,45 @@ function App() {
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
 
       if (fileExtension === 'docx') {
-        // Handle Word documents with Mammoth.js
         setFileType('word');
         const arrayBuffer = await file.arrayBuffer();
-        const result = await mammoth.convertToHtml({ arrayBuffer });
-        setFileContent(result.value);
+        
+        // Convert to HTML with image conversion
+        const options = {
+          convertImage: mammoth.images.imgElement((image: any) => {
+            return image.read("base64").then((imageBuffer: string) => {
+              return {
+                src: "data:" + image.contentType + ";base64," + imageBuffer
+              };
+            });
+          })
+        };
+        
+        const htmlResult = await mammoth.convertToHtml({ arrayBuffer }, options);
+        
+        // Extract raw text to detect underscores
+        const textResult = await mammoth.extractRawText({ arrayBuffer });
+        const hasUnderscores = /_+/.test(textResult.value);
+        
+        let processedHtml = htmlResult.value;
+        
+        if (hasUnderscores) {
+          // Preserve sequences of underscores in the HTML
+          processedHtml = processedHtml.replace(/<p>(.*?)<\/p>/g, ( content) => {
+            const processedContent = content.replace(/_{3,}/g, (underscores: string) => {
+              return `<span class="underscore-field">${'_'.repeat(underscores.length)}</span>`;
+            });
+            return `<p>${processedContent}</p>`;
+          });
+        }
+        
+        setFileContent(processedHtml);
       } 
       else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
-        // Handle Excel files with SheetJS
         setFileType('excel');
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
-        // Convert all sheets to HTML tables
         const sheets = workbook.SheetNames.map(sheetName => {
           const worksheet = workbook.Sheets[sheetName];
           const htmlTable = XLSX.utils.sheet_to_html(worksheet);
@@ -47,16 +75,11 @@ function App() {
         
         setExcelData(sheets);
       }
-      else if (fileExtension === 'pdf') {
-        setFileType('pdf');
-        const url = URL.createObjectURL(file);
-        setFileContent(url);
-      }
       else if (fileExtension === 'doc' || fileExtension === 'ppt' || fileExtension === 'pptx') {
         setError(`${fileExtension.toUpperCase()} files require conversion. Please save as DOCX (for Word) or use Google Docs viewer.`);
       }
       else {
-        setError('Unsupported file type. Please upload .docx, .xlsx, .xls, or .pdf files.');
+        setError('Unsupported file type. Please upload .docx, .xlsx, .xls');
       }
     } catch (err) {
       setError(`Error loading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -81,7 +104,7 @@ function App() {
             Office Document Viewer
           </h1>
           <p className="text-center text-gray-600 mb-8">
-            Upload Word (.docx), Excel (.xlsx, .xls), or PDF files
+            Upload Word (.docx), Excel (.xlsx, .xls)
           </p>
 
           {!selectedFile ? (
@@ -97,7 +120,7 @@ function App() {
                       id="file-upload"
                       type="file"
                       className="hidden"
-                      accept=".docx,.xlsx,.xls,.pdf"
+                      accept=".docx,.xlsx,.xls"
                       onChange={handleFileUpload}
                       disabled={isLoading}
                     />
@@ -111,10 +134,6 @@ function App() {
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Table className="w-4 h-4 text-green-500" />
                       <span>Excel</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <FileSpreadsheet className="w-4 h-4 text-red-500" />
-                      <span>PDF</span>
                     </div>
                   </div>
 
@@ -139,7 +158,6 @@ function App() {
                   <div className="bg-blue-100 p-2 rounded">
                     {fileType === 'word' && <FileText className="w-5 h-5 text-blue-600" />}
                     {fileType === 'excel' && <Table className="w-5 h-5 text-green-600" />}
-                    {fileType === 'pdf' && <FileSpreadsheet className="w-5 h-5 text-red-600" />}
                   </div>
                   <div>
                     <p className="font-medium text-gray-800">{selectedFile.name}</p>
@@ -163,7 +181,6 @@ function App() {
                 </div>
               )}
 
-              {/* Word Document Display */}
               {fileType === 'word' && fileContent && (
                 <div className="bg-white rounded-lg shadow-lg p-8 overflow-auto" style={{ maxHeight: '80vh' }}>
                   <div 
@@ -173,7 +190,6 @@ function App() {
                 </div>
               )}
 
-              {/* Excel Document Display */}
               {fileType === 'excel' && excelData.length > 0 && (
                 <div className="bg-white rounded-lg shadow-lg overflow-auto" style={{ maxHeight: '80vh' }}>
                   {excelData.map((sheet, idx) => (
@@ -185,22 +201,11 @@ function App() {
                         className="overflow-x-auto"
                         dangerouslySetInnerHTML={{ __html: sheet.html }}
                         style={{
-                          fontSize: '14px'
+                          fontSize: '11px'
                         }}
                       />
                     </div>
                   ))}
-                </div>
-              )}
-
-              {/* PDF Display */}
-              {fileType === 'pdf' && fileContent && (
-                <div className="bg-white rounded-lg shadow-lg overflow-hidden" style={{ height: '80vh' }}>
-                  <iframe
-                    src={fileContent}
-                    className="w-full h-full"
-                    title="PDF Viewer"
-                  />
                 </div>
               )}
             </div>
@@ -209,7 +214,41 @@ function App() {
       </div>
 
       <style>{`
-        /* Word document styles */
+        .underscore-field {
+          font-family: monospace;
+          letter-spacing: 0.05em;
+          white-space: pre;
+          color: #000;
+        }
+        
+        .prose p {
+          margin: 0.5em 0;
+          white-space: pre-wrap;
+          word-wrap: break-word;
+        }
+        
+        .prose img {
+          display: block;
+          margin: 1em auto;
+        }
+        
+        @media (max-width: 640px) {
+          .prose img {
+            max-width: 100% !important;
+            height: auto !important;
+            width: auto !important;
+            max-height: 400px !important;
+            object-fit: contain;
+          }
+        }
+        
+        @media (min-width: 641px) {
+          .prose img {
+            max-width: none !important;
+            height: auto !important;
+          }
+        }
+        
         .docx-wrapper {
           background: white;
           padding: 20px;
@@ -236,13 +275,27 @@ function App() {
           }
         }
         
-        /* Make docx content responsive */
         .docx-wrapper * {
           max-width: 100% !important;
         }
         
         .docx-wrapper img {
+          max-width: 100% !important;
           height: auto !important;
+        }
+        
+        @media (max-width: 640px) {
+          .docx-wrapper img {
+            max-width: 100% !important;
+            max-height: 400px !important;
+            object-fit: contain;
+          }
+        }
+        
+        @media (min-width: 641px) {
+          .docx-wrapper img {
+            max-width: none !important;
+          }
         }
         
         .docx-wrapper table {
@@ -251,21 +304,20 @@ function App() {
         
         @media (min-width: 640px) {
           .docx-wrapper table {
-            font-size: 14px;
+            font-size: 10px;
           }
         }
         
-        /* Excel table styles */
         .prose table {
           border-collapse: collapse;
           width: 100%;
           margin: 1em 0;
-          font-size: 11px;
+          font-size: 10px;
         }
         
         @media (min-width: 640px) {
           .prose table {
-            font-size: 13px;
+            font-size: 11px;
           }
         }
         
@@ -287,6 +339,7 @@ function App() {
           background-color: #f9fafb;
           font-weight: 600;
         }
+        
         table {
           border-collapse: collapse;
           width: 100%;
@@ -295,7 +348,7 @@ function App() {
         
         @media (min-width: 640px) {
           table {
-            font-size: 13px;
+            font-size: 11px;
           }
         }
         
@@ -315,6 +368,7 @@ function App() {
         table tr:nth-child(even) {
           background-color: #f9fafb;
         }
+        
         table th {
           background-color: #3b82f6;
           color: white;

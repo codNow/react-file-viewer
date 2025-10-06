@@ -1,382 +1,325 @@
-import { useState, type ChangeEvent } from 'react';
-import { Upload, X, FileText, Table } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import * as mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 
-function App() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileContent, setFileContent] = useState<string>('');
-  const [fileType, setFileType] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string>('');
-  const [excelData, setExcelData] = useState<any[]>([]);
-
-
-
-  const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.target.files?.[0];
-    
-    if (!file) return;
-
-    setError('');
-    setIsLoading(true);
-    setSelectedFile(file);
-    setFileContent('');
-    setExcelData([]);
-
-    try {
-      const fileExtension = file.name.split('.').pop()?.toLowerCase();
-
-      if (fileExtension === 'docx') {
-        setFileType('word');
-        const arrayBuffer = await file.arrayBuffer();
-        
-        // Convert to HTML with image conversion
-        const options = {
-          convertImage: mammoth.images.imgElement((image: any) => {
-            return image.read("base64").then((imageBuffer: string) => {
-              return {
-                src: "data:" + image.contentType + ";base64," + imageBuffer
-              };
-            });
-          })
-        };
-        
-        const htmlResult = await mammoth.convertToHtml({ arrayBuffer }, options);
-        
-        // Extract raw text to detect underscores
-        const textResult = await mammoth.extractRawText({ arrayBuffer });
-        const hasUnderscores = /_+/.test(textResult.value);
-        
-        let processedHtml = htmlResult.value;
-        
-        if (hasUnderscores) {
-          // Preserve sequences of underscores in the HTML
-          processedHtml = processedHtml.replace(/<p>(.*?)<\/p>/g, ( content) => {
-            const processedContent = content.replace(/_{3,}/g, (underscores: string) => {
-              return `<span class="underscore-field">${'_'.repeat(underscores.length)}</span>`;
-            });
-            return `<p>${processedContent}</p>`;
-          });
-        }
-        
-        setFileContent(processedHtml);
-      } 
-      else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
-        setFileType('excel');
-        const arrayBuffer = await file.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        
-        const sheets = workbook.SheetNames.map(sheetName => {
-          const worksheet = workbook.Sheets[sheetName];
-          const htmlTable = XLSX.utils.sheet_to_html(worksheet);
-          return { name: sheetName, html: htmlTable };
-        });
-        
-        setExcelData(sheets);
-      }
-      else if (fileExtension === 'doc' || fileExtension === 'ppt' || fileExtension === 'pptx') {
-        setError(`${fileExtension.toUpperCase()} files require conversion. Please save as DOCX (for Word) or use Google Docs viewer.`);
-      }
-      else {
-        setError('Unsupported file type. Please upload .docx, .xlsx, .xls');
-      }
-    } catch (err) {
-      setError(`Error loading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleClearFile = () => {
-    setSelectedFile(null);
-    setFileContent('');
-    setExcelData([]);
-    setFileType('');
-    setError('');
-  };
-
-  return (
-    <div className="bg-gray-50 min-h-screen">
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2 text-center">
-            Office Document Viewer
-          </h1>
-          <p className="text-center text-gray-600 mb-8">
-            Upload Word (.docx), Excel (.xlsx, .xls)
-          </p>
-
-          {!selectedFile ? (
-            <div className="max-w-2xl mx-auto mb-8">
-              <div className="bg-white rounded-xl shadow-lg p-8 border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors">
-                <div className="text-center">
-                  <Upload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <label htmlFor="file-upload" className="cursor-pointer">
-                    <span className="text-lg font-medium text-gray-700 hover:text-blue-600 transition-colors inline-block">
-                      Choose a document to upload
-                    </span>
-                    <input
-                      id="file-upload"
-                      type="file"
-                      className="hidden"
-                      accept=".docx,.xlsx,.xls"
-                      onChange={handleFileUpload}
-                      disabled={isLoading}
-                    />
-                  </label>
-                  
-                  <div className="mt-6 flex justify-center gap-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <FileText className="w-4 h-4 text-blue-500" />
-                      <span>Word</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Table className="w-4 h-4 text-green-500" />
-                      <span>Excel</span>
-                    </div>
-                  </div>
-
-                  {error && (
-                    <p className="text-red-600 text-sm mt-4 bg-red-50 p-3 rounded-lg">
-                      {error}
-                    </p>
-                  )}
-                  {isLoading && (
-                    <div className="mt-4">
-                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
-                      <p className="text-blue-600 text-sm mt-2">Loading document...</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="bg-blue-100 p-2 rounded">
-                    {fileType === 'word' && <FileText className="w-5 h-5 text-blue-600" />}
-                    {fileType === 'excel' && <Table className="w-5 h-5 text-green-600" />}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-800">{selectedFile.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {(selectedFile.size / 1024).toFixed(2)} KB
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleClearFile}
-                  className="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-lg transition-colors"
-                  title="Remove document"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                  {error}
-                </div>
-              )}
-
-              {fileType === 'word' && fileContent && (
-                <div className="bg-white rounded-lg shadow-lg p-8 overflow-auto" style={{ maxHeight: '80vh' }}>
-                  <div 
-                    className="prose max-w-none"
-                    dangerouslySetInnerHTML={{ __html: fileContent }}
-                  />
-                </div>
-              )}
-
-              {fileType === 'excel' && excelData.length > 0 && (
-                <div className="bg-white rounded-lg shadow-lg overflow-auto" style={{ maxHeight: '80vh' }}>
-                  {excelData.map((sheet, idx) => (
-                    <div key={idx} className="p-6 border-b last:border-b-0">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4 bg-gray-100 px-4 py-2 rounded">
-                        Sheet: {sheet.name}
-                      </h3>
-                      <div 
-                        className="overflow-x-auto"
-                        dangerouslySetInnerHTML={{ __html: sheet.html }}
-                        style={{
-                          fontSize: '11px'
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <style>{`
-        .underscore-field {
-          font-family: monospace;
-          letter-spacing: 0.05em;
-          white-space: pre;
-          color: #000;
-        }
-        
-        .prose p {
-          margin: 0.5em 0;
-          white-space: pre-wrap;
-          word-wrap: break-word;
-        }
-        
-        .prose img {
-          display: block;
-          margin: 1em auto;
-        }
-        
-        @media (max-width: 640px) {
-          .prose img {
-            max-width: 100% !important;
-            height: auto !important;
-            width: auto !important;
-            max-height: 400px !important;
-            object-fit: contain;
-          }
-        }
-        
-        @media (min-width: 641px) {
-          .prose img {
-            max-width: none !important;
-            height: auto !important;
-          }
-        }
-        
-        .docx-wrapper {
-          background: white;
-          padding: 20px;
-          box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        
-        @media (min-width: 640px) {
-          .docx-wrapper {
-            padding: 40px;
-          }
-        }
-        
-        .docx-wrapper section.docx {
-          background: white;
-          margin-bottom: 20px;
-          padding: 10px;
-          max-width: 100%;
-          overflow-x: auto;
-        }
-        
-        @media (min-width: 640px) {
-          .docx-wrapper section.docx {
-            padding: 20px;
-          }
-        }
-        
-        .docx-wrapper * {
-          max-width: 100% !important;
-        }
-        
-        .docx-wrapper img {
-          max-width: 100% !important;
-          height: auto !important;
-        }
-        
-        @media (max-width: 640px) {
-          .docx-wrapper img {
-            max-width: 100% !important;
-            max-height: 400px !important;
-            object-fit: contain;
-          }
-        }
-        
-        @media (min-width: 641px) {
-          .docx-wrapper img {
-            max-width: none !important;
-          }
-        }
-        
-        .docx-wrapper table {
-          font-size: 12px;
-        }
-        
-        @media (min-width: 640px) {
-          .docx-wrapper table {
-            font-size: 10px;
-          }
-        }
-        
-        .prose table {
-          border-collapse: collapse;
-          width: 100%;
-          margin: 1em 0;
-          font-size: 10px;
-        }
-        
-        @media (min-width: 640px) {
-          .prose table {
-            font-size: 11px;
-          }
-        }
-        
-        .prose th,
-        .prose td {
-          border: 1px solid #e5e7eb;
-          padding: 4px 6px;
-          text-align: left;
-        }
-        
-        @media (min-width: 640px) {
-          .prose th,
-          .prose td {
-            padding: 8px 12px;
-          }
-        }
-        
-        .prose th {
-          background-color: #f9fafb;
-          font-weight: 600;
-        }
-        
-        table {
-          border-collapse: collapse;
-          width: 100%;
-          font-size: 11px;
-        }
-        
-        @media (min-width: 640px) {
-          table {
-            font-size: 11px;
-          }
-        }
-        
-        table td,
-        table th {
-          border: 1px solid #ddd;
-          padding: 4px 6px;
-        }
-        
-        @media (min-width: 640px) {
-          table td,
-          table th {
-            padding: 8px;
-          }
-        }
-        
-        table tr:nth-child(even) {
-          background-color: #f9fafb;
-        }
-        
-        table th {
-          background-color: #3b82f6;
-          color: white;
-          font-weight: bold;
-        }
-      `}</style>
-    </div>
-  );
+interface FileData {
+  type: 'docx' | 'xlsx';
+  fileName: string;
+  sheets?: Array<{ name: string; html: string }>;
 }
 
-export default App;
+interface FlutterMessage {
+  type: string;
+  fileType: 'docx' | 'xlsx';
+  fileName: string;
+  fileData: string;
+}
+
+export default function FileViewer() {
+  const [fileData, setFileData] = useState<FileData | null>(null);
+  const [content, setContent] = useState<string>('');
+  const [excelSheets, setExcelSheets] = useState<Array<{ name: string; html: string }>>([]);
+  const [selectedSheetIndex, setSelectedSheetIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Notify parent that viewer is ready
+    window.parent.postMessage({ type: 'VIEWER_READY' }, '*');
+
+    // Listen for file data from Flutter WebView
+    const handleMessage = async (event: MessageEvent<FlutterMessage>) => {
+      if (event.data.type === 'FILE_DATA') {
+        const { fileType, fileName, fileData } = event.data;
+        
+        try {
+          setLoading(true);
+          setError(null);
+          
+          // Convert base64 to ArrayBuffer
+          const byteCharacters = atob(fileData);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const arrayBuffer = byteArray.buffer;
+
+          if (fileType === 'docx') {
+            await renderDocx(arrayBuffer, fileName);
+          } else if (fileType === 'xlsx') {
+            await renderExcel(arrayBuffer, fileName);
+          }
+          
+          setLoading(false);
+        } catch (err) {
+          console.error('Error processing file:', err);
+          setError(err instanceof Error ? err.message : 'Unknown error occurred');
+          setLoading(false);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const renderDocx = async (arrayBuffer: ArrayBuffer, fileName: string) => {
+    const options = {
+      convertImage: mammoth.images.imgElement((image: any) => {
+        return image.read("base64").then((imageBuffer: string) => {
+          return {
+            src: `data:${image.contentType};base64,${imageBuffer}`
+          };
+        });
+      })
+    };
+    
+    const htmlResult = await mammoth.convertToHtml({ arrayBuffer }, options);
+    const textResult = await mammoth.extractRawText({ arrayBuffer });
+    const hasUnderscores = /_+/.test(textResult.value);
+    
+    let processedHtml = htmlResult.value;
+    
+    if (hasUnderscores) {
+      processedHtml = processedHtml.replace(/<p>(.*?)<\/p>/g, (match, content) => {
+        const processedContent = content.replace(/_{3,}/g, (underscores: string) => {
+          return `<span class="underscore-field">${'_'.repeat(underscores.length)}</span>`;
+        });
+        return `<p>${processedContent}</p>`;
+      });
+    }
+    
+    setFileData({ type: 'docx', fileName });
+    setContent(processedHtml);
+  };
+
+  const renderExcel = async (arrayBuffer: ArrayBuffer, fileName: string) => {
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    
+    const sheets = workbook.SheetNames.map(sheetName => {
+      const worksheet = workbook.Sheets[sheetName];
+      const htmlTable = XLSX.utils.sheet_to_html(worksheet);
+      return { name: sheetName, html: htmlTable };
+    });
+
+    setFileData({ type: 'xlsx', fileName, sheets });
+    setExcelSheets(sheets);
+    setSelectedSheetIndex(0);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen flex-col gap-4 bg-gray-50">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-600 font-medium">Loading document...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen flex-col gap-4 p-6 bg-gray-50">
+        <div className="text-6xl">⚠️</div>
+        <h2 className="text-2xl font-bold text-red-600">Error Loading File</h2>
+        <p className="text-gray-600 text-center max-w-md">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  if (!fileData) {
+    return (
+      <div className="flex items-center justify-center min-h-screen flex-col gap-4 bg-gray-50">
+        <div className="text-6xl">📄</div>
+        <p className="text-gray-600 font-medium">Waiting for file...</p>
+      </div>
+    );
+  }
+
+  // Render DOCX
+  if (fileData.type === 'docx') {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 text-white">
+              <div className="flex items-center gap-3">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <div>
+                  <h2 className="font-semibold text-lg">{fileData.fileName}</h2>
+                  <p className="text-blue-100 text-sm">Word Document</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-8">
+              <div 
+                className="prose prose-sm sm:prose lg:prose-lg max-w-none"
+                dangerouslySetInnerHTML={{ __html: content }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <style>{`
+          .underscore-field {
+            font-family: monospace;
+            letter-spacing: 0.05em;
+            white-space: pre;
+            color: #000;
+          }
+          
+          .prose p {
+            margin: 0.75em 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+          }
+          
+          .prose img {
+            display: block;
+            margin: 1.5em auto;
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          }
+          
+          .prose table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1.5em 0;
+            font-size: 0.9em;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+          }
+          
+          .prose th,
+          .prose td {
+            border: 1px solid #e5e7eb;
+            padding: 10px 12px;
+            text-align: left;
+          }
+          
+          .prose th {
+            background-color: #f3f4f6;
+            font-weight: 600;
+            color: #374151;
+          }
+          
+          .prose tr:nth-child(even) {
+            background-color: #f9fafb;
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // Render XLSX
+  if (fileData.type === 'xlsx' && excelSheets.length > 0) {
+    const currentSheet = excelSheets[selectedSheetIndex];
+
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white shadow-md sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center gap-3 mb-4">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <div>
+                <h2 className="font-semibold text-lg text-gray-800">{fileData.fileName}</h2>
+                <p className="text-gray-500 text-sm">Excel Spreadsheet</p>
+              </div>
+            </div>
+            
+            {excelSheets.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {excelSheets.map((sheet, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedSheetIndex(idx)}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                      selectedSheetIndex === idx
+                        ? 'bg-green-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {sheet.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className="max-w-7xl mx-auto p-4">
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <div 
+                className="excel-table-container"
+                dangerouslySetInnerHTML={{ __html: currentSheet.html }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <style>{`
+          .excel-table-container table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+          }
+          
+          .excel-table-container td,
+          .excel-table-container th {
+            border: 1px solid #d1d5db;
+            padding: 10px 12px;
+            text-align: left;
+            min-width: 100px;
+          }
+          
+          .excel-table-container th {
+            background-color: #10b981;
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+          }
+          
+          .excel-table-container tr:nth-child(even) {
+            background-color: #f9fafb;
+          }
+          
+          .excel-table-container tr:hover {
+            background-color: #f3f4f6;
+          }
+          
+          @media (max-width: 640px) {
+            .excel-table-container table {
+              font-size: 11px;
+            }
+            
+            .excel-table-container td,
+            .excel-table-container th {
+              padding: 6px 8px;
+              min-width: 80px;
+            }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  return null;
+}
+

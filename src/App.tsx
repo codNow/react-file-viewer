@@ -82,7 +82,7 @@ export default function FileViewer() {
     let processedHtml = htmlResult.value;
     
     if (hasUnderscores) {
-      processedHtml = processedHtml.replace(/<p>(.*?)<\/p>/g, (match, content) => {
+      processedHtml = processedHtml.replace(/<p>(.*?)<\/p>/g, (content) => {
         const processedContent = content.replace(/_{3,}/g, (underscores: string) => {
           return `<span class="underscore-field">${'_'.repeat(underscores.length)}</span>`;
         });

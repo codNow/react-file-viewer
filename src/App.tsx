@@ -146,14 +146,12 @@ export default function FileViewer() {
   if (fileData.type === 'docx') {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-4xl mx-auto px-4">
+        <div className="max-w-4xl mx-auto px-2">
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-           <div className="p-8">
-              <div 
+          <div 
                 className="prose prose-sm sm:prose lg:prose-lg max-w-none"
                 dangerouslySetInnerHTML={{ __html: content }}
               />
-            </div>
           </div>
         </div>
 

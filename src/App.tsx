@@ -148,19 +148,7 @@ export default function FileViewer() {
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-4xl mx-auto px-4">
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 text-white">
-              <div className="flex items-center gap-3">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <div>
-                  <h2 className="font-semibold text-lg">{fileData.fileName}</h2>
-                  <p className="text-blue-100 text-sm">Word Document</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-8">
+           <div className="p-8">
               <div 
                 className="prose prose-sm sm:prose lg:prose-lg max-w-none"
                 dangerouslySetInnerHTML={{ __html: content }}
@@ -231,15 +219,6 @@ export default function FileViewer() {
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-md sticky top-0 z-10">
           <div className="max-w-7xl mx-auto px-4 py-4">
-            <div className="flex items-center gap-3 mb-4">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              <div>
-                <h2 className="font-semibold text-lg text-gray-800">{fileData.fileName}</h2>
-                <p className="text-gray-500 text-sm">Excel Spreadsheet</p>
-              </div>
-            </div>
             
             {excelSheets.length > 1 && (
               <div className="flex gap-2 overflow-x-auto pb-2">
